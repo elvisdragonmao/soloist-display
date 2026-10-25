@@ -3,13 +3,16 @@
 
 Serves the web UI, tells it where Soloist's WebSocket API listens (Soloist
 picks a random port and writes it to its data dir), and looks up synced lyrics
-on LRCLIB with an on-disk cache. Standard library only.
+on LRCLIB with an on-disk cache. Standard library only; runs on Linux, macOS
+and Windows.
 """
 
 import argparse
 import json
 import os
+import shutil
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -20,14 +23,35 @@ from pathlib import Path
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
 HOME = Path.home()
-SOLOIST_DATA = Path(os.environ.get("SOLOIST_DATA_DIR", HOME / ".local/share/soloist"))
-CACHE_DIR = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "soloist-display" / "lyrics"
+
+
+def soloist_data_dir():
+    """Where Soloist writes ws.addr and ws.port: its default data dir per platform."""
+    if os.environ.get("SOLOIST_DATA_DIR"):
+        return Path(os.environ["SOLOIST_DATA_DIR"])
+    if sys.platform == "darwin":
+        return HOME / "Library/Application Support/soloist"
+    if os.name == "nt":
+        return Path(os.environ["LOCALAPPDATA"]) / "soloist" / "data"
+    return Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "soloist"
+
+
+def cache_dir():
+    if sys.platform == "darwin":
+        return HOME / "Library/Caches/soloist-display"
+    if os.name == "nt":
+        return Path(os.environ["LOCALAPPDATA"]) / "soloist-display" / "cache"
+    return Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "soloist-display"
+
+
+SOLOIST_DATA = soloist_data_dir()
+CACHE_DIR = cache_dir() / "lyrics"
 
 LRCLIB = "https://lrclib.net/api"
 USER_AGENT = "soloist-display (https://github.com/elvisdragonmao/soloist-display)"
 # A track LRCLIB had nothing for is asked again after this long.
 MISS_TTL = 6 * 3600
-# The display window as labwc knows it (see soloist-display-open).
+# The display window as wlroots compositors know it (see open.py).
 APP_ID = os.environ.get("SOLOIST_DISPLAY_APP_ID", "chrome-127.0.0.1__-Default")
 
 
@@ -91,12 +115,26 @@ def cached_lyrics(key, track, artist, album, duration):
     return data
 
 
-def toggle_fullscreen():
-    """Press F11 in the display window. A page cannot leave the browser's own
-    full screen (--start-fullscreen) by script, so the server does it."""
-    env = {"WAYLAND_DISPLAY": "wayland-0", **os.environ}
-    subprocess.run(["wlrctl", "toplevel", "focus", f"app_id:{APP_ID}"], env=env, timeout=5)
-    subprocess.run(["wtype", "-k", "F11"], env=env, timeout=5, check=True)
+def press_fullscreen_key():
+    """Press the browser's full-screen key in the display window. A page cannot
+    leave the browser's own full screen (--start-fullscreen) by script, so the
+    server does it. The window was just clicked, so it has the focus."""
+    if sys.platform == "darwin":
+        # Needs Accessibility permission for the Python that runs this server.
+        script = 'tell application "System Events" to keystroke "f" using {control down, command down}'
+        cmds = [["osascript", "-e", script]]
+    elif os.name == "nt":
+        cmds = [["powershell", "-NoProfile", "-Command", "(New-Object -ComObject WScript.Shell).SendKeys('{F11}')"]]
+    elif os.environ.get("WAYLAND_DISPLAY") and shutil.which("wtype"):
+        cmds = [["wtype", "-k", "F11"]]
+        if shutil.which("wlrctl"):
+            cmds.insert(0, ["wlrctl", "toplevel", "focus", f"app_id:{APP_ID}"])
+    elif os.environ.get("DISPLAY") and shutil.which("xdotool"):
+        cmds = [["xdotool", "key", "F11"]]
+    else:
+        raise FileNotFoundError("no tool to press F11 (install wtype on Wayland or xdotool on X11)")
+    for cmd in cmds:
+        subprocess.run(cmd, timeout=5, check=True)
 
 
 def soloist_ws_url():
@@ -131,19 +169,29 @@ class Handler(SimpleHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/api/config":
             return self.send_json({"ws": soloist_ws_url()})
+        if url.path == "/api/status":
+            # The page pings every 15 s, slower when hidden (Chrome throttles timers).
+            seen = self.server.last_ping
+            return self.send_json({"display_open": seen is not None and time.time() - seen < 90})
         if url.path == "/api/lyrics":
             return self.lyrics(urllib.parse.parse_qs(url.query))
         return super().do_GET()
 
     def do_POST(self):
-        if urllib.parse.urlsplit(self.path).path != "/api/fullscreen":
-            return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        path = urllib.parse.urlsplit(self.path).path
         # Only the display page itself, not some other site open in a browser.
         origin = self.headers.get("Origin")
         if origin and origin != f"http://{self.headers.get('Host')}":
             return self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
+        if path == "/api/ping":
+            self.server.last_ping = time.time()
+            return self.send_json({"ok": True})
+        if path != "/api/fullscreen":
+            return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
         try:
-            toggle_fullscreen()
+            press_fullscreen_key()
+        except FileNotFoundError as e:
+            return self.send_json({"error": str(e)}, HTTPStatus.NOT_IMPLEMENTED)
         except (OSError, subprocess.SubprocessError) as e:
             return self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
         return self.send_json({"ok": True})
@@ -167,6 +215,7 @@ def main():
     parser.add_argument("--port", type=int, default=8787)
     args = parser.parse_args()
     server = ThreadingHTTPServer((args.host, args.port), Handler)
+    server.last_ping = None
     print(f"serving on http://{args.host}:{args.port}", flush=True)
     server.serve_forever()
 

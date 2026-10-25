@@ -10,4 +10,4 @@ DEST="${DEST:-apps/soloist-display}"
 
 cd "$(dirname "$0")"
 rsync -a --delete --exclude .git ./ "$PI:$DEST/"
-ssh "$PI" "cd $DEST && ./install.sh ${1:-all}"
+ssh -t "$PI" "cd $DEST && ./install.sh ${1:-all}"

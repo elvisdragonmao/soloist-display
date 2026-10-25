@@ -9,4 +9,6 @@
 | `labwc/environment` | `~/.config/labwc/environment` |
 | `autostart/m-air-edit.desktop` | `~/.config/autostart/m-air-edit.desktop`（Midas MR18 混音器控制） |
 
-`~/.config/soloist/soloist.env` 內含 Soloist API key，不進版控；格式見 `soloist/soloist.env.example`。
+`~/.config/soloist/soloist.env` 內含 Soloist API key 與裝置名稱（`🪗 活中社辦樹莓派`），不進版控；格式見 `soloist/soloist.env.example`。
+
+`~/apps/spotify-soloist/` 是最早手動下載 Soloist 的目錄，現在由 `soloist-update` 直接更新 `/usr/local/bin/soloist`，那個目錄已不再使用。

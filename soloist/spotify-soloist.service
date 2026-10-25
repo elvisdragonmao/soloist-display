@@ -1,12 +1,13 @@
 [Unit]
-Description=Spotify Soloist - Clubroom Speaker
+Description=Spotify Soloist
 Wants=pipewire.service wireplumber.service
 After=pipewire.service wireplumber.service
 
 [Service]
 Type=simple
 EnvironmentFile=%h/.config/soloist/soloist.env
-ExecStart=/usr/local/bin/soloist --device-name "🪗 活中社辦樹莓派" --api-key ${SOLOIST_API_KEY} --ws 127.0.0.1:0
+# SOLOIST_DEVICE_NAME and SOLOIST_API_KEY come from soloist.env.
+ExecStart=/usr/local/bin/soloist --device-name ${SOLOIST_DEVICE_NAME} --api-key ${SOLOIST_API_KEY} --ws 127.0.0.1:0
 Restart=on-failure
 RestartSec=5
 

@@ -216,15 +216,16 @@ function tick() {
 // ─── Full screen ─────────────────────────────────────────────────────────────
 //
 // The clubroom only has a mouse: moving it shows a hint, and a click leaves full
-// screen, or goes back to it. The server presses F11, because the page cannot
-// leave the browser's own full screen by itself.
+// screen, or goes back to it. The display opens in the browser's own full screen
+// (--start-fullscreen), which a page cannot leave by script, so the server presses
+// the full-screen key for us. Where it can't, the page's Fullscreen API is used.
 
 const POINTER_HIDE_MS = 3000;
 let pointerTimer = null;
 let toggling = false;
 
 function isFullscreen() {
-  return innerWidth >= screen.width - 1 && innerHeight >= screen.height - 1;
+  return !!document.fullscreenElement || (innerWidth >= screen.width - 1 && innerHeight >= screen.height - 1);
 }
 
 function updateFullscreen() {
@@ -234,6 +235,7 @@ function updateFullscreen() {
 }
 
 addEventListener("resize", updateFullscreen);
+document.addEventListener("fullscreenchange", updateFullscreen);
 updateFullscreen();
 
 addEventListener("mousemove", () => {
@@ -242,35 +244,49 @@ addEventListener("mousemove", () => {
   pointerTimer = setTimeout(() => body.classList.remove("pointer"), POINTER_HIDE_MS);
 });
 
+async function toggleFullscreen() {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  try {
+    const res = await fetch("/api/fullscreen", { method: "POST" });
+    if (res.ok) return;
+  } catch {}
+  if (!isFullscreen()) return document.documentElement.requestFullscreen();
+  $("fs-hint").textContent = "按 F11（macOS：⌃⌘F）離開全螢幕";
+}
+
 addEventListener("click", async () => {
   if (toggling) return;
   toggling = true;
   try {
-    await fetch("/api/fullscreen", { method: "POST" });
+    await toggleFullscreen();
   } catch (error) {
     console.warn("fullscreen", error);
   }
   setTimeout(() => (toggling = false), 800);
 });
 
-// ?demo=Track|Artist|seconds|coverUrl|startSecond plays a fake track, for working
-// on the UI without touching the real player.
-function demo(spec) {
-  const [track, artist, seconds, cover, from = 0] = spec.split("|");
-  const image = (size) => ({ url: cover || "https://i.scdn.co/image/ab67616d0000b273ba5db46f4b838ef6027e6f96", size });
+// Lets soloist-display-open see that the display is already open.
+const ping = () => fetch("/api/ping", { method: "POST" }).catch(() => {});
+
+// ?demo&track=…&artist=…&album=…&duration=197&cover=…&at=60 plays a fake track,
+// for working on the UI (or taking screenshots) without touching the real player.
+function demo(q) {
+  const image = (size) => ({ url: q.get("cover") || "", size });
+  const artists = (q.get("artist") || "Artist").split(/\s*,\s*/);
   handle({ type: "auth_state", is_active: true, device_name: "Demo" });
   handle({
     type: "playback_state",
-    status: "playing",
+    status: q.get("status") || "playing",
     is_active: true,
-    position: { position_ms: Number(from) * 1000, timestamp_ms: Date.now(), speed: 1 },
+    position: { position_ms: Number(q.get("at") || 0) * 1000, timestamp_ms: Date.now(), speed: 1 },
     item: {
-      uri: `spotify:track:demo${track.replace(/\W/g, "")}`,
+      uri: `spotify:track:demo${(q.get("track") || "").replace(/\W/g, "")}`,
       decorations: {
-        identity: { name: track },
+        identity: { name: q.get("track") || "Track" },
         visual_identity: { cover: [image("default"), image("xlarge")] },
-        creators: [{ entity: { decorations: { identity: { name: artist } } } }],
-        playback: { duration_ms: Number(seconds) * 1000 },
+        creators: artists.map((name) => ({ entity: { decorations: { identity: { name } } } })),
+        parent: { entity: { decorations: { identity: { name: q.get("album") || "" } } } },
+        playback: { duration_ms: Number(q.get("duration") || 200) * 1000 },
       },
     },
   });
@@ -278,9 +294,11 @@ function demo(spec) {
 
 setInterval(tick, 1000);
 tick();
-if (params.has("demo")) demo(params.get("demo"));
+if (params.has("demo")) demo(params);
 else {
   body.classList.add("offline");
   connect();
+  setInterval(ping, 15000);
+  ping();
 }
 requestAnimationFrame(frame);

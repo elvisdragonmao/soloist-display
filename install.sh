@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Install everything on the Raspberry Pi. Run as the desktop user (sdc) from
-# the repo checkout on the Pi; uses sudo for the root parts.
+# Install on Linux (systemd): Soloist as a user service with a daily root
+# updater, and the now-playing display. Run as the desktop user from the repo
+# checkout; uses sudo for the root parts. macOS: install-macos.sh. Windows:
+# install.ps1.
 #
 #   ./install.sh            soloist + display
 #   ./install.sh soloist    Soloist service and auto-update timer only
@@ -9,24 +11,44 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
+ENV_FILE="$CONFIG/soloist/soloist.env"
+LIB=/usr/local/lib/soloist-display
 
 install_soloist() {
-  install -Dm644 "$REPO/soloist/spotify-soloist.service" "$CONFIG/systemd/user/spotify-soloist.service"
-  if [[ ! -f "$CONFIG/soloist/soloist.env" ]]; then
-    install -Dm600 "$REPO/soloist/soloist.env.example" "$CONFIG/soloist/soloist.env"
-    echo "!! Put the Soloist API key in $CONFIG/soloist/soloist.env"
+  if [[ ! -f "$ENV_FILE" ]]; then
+    install -Dm600 "$REPO/soloist/soloist.env.example" "$ENV_FILE"
+    sed -i "s|^SOLOIST_DEVICE_NAME=.*|SOLOIST_DEVICE_NAME=$(hostname)|" "$ENV_FILE"
+    echo "!! Put the Soloist API key in $ENV_FILE, then run this again"
+    exit 1
   fi
-  systemctl --user daemon-reload
-  systemctl --user enable spotify-soloist.service
+  grep -q '^SOLOIST_DEVICE_NAME=' "$ENV_FILE" || echo "SOLOIST_DEVICE_NAME=$(hostname)" >> "$ENV_FILE"
 
-  sudo install -m755 "$REPO/soloist/soloist-update.sh" /usr/local/sbin/soloist-update
+  # The updater runs as root, installs to /usr/local/bin and restarts the user service.
+  sudo install -Dm644 "$REPO/soloist/update.py" "$LIB/update.py"
+  sudo tee /usr/local/sbin/soloist-update > /dev/null <<EOF
+#!/bin/sh
+exec /usr/bin/python3 $LIB/update.py --bin /usr/local/bin/soloist --restart systemd:spotify-soloist --user $USER "\$@"
+EOF
+  sudo chmod 755 /usr/local/sbin/soloist-update
   sudo install -m644 "$REPO/soloist/soloist-update.service" "$REPO/soloist/soloist-update.timer" /etc/systemd/system/
   sudo systemctl daemon-reload
   sudo systemctl enable --now soloist-update.timer
+  [[ -x /usr/local/bin/soloist ]] || sudo /usr/local/sbin/soloist-update
+
+  install -Dm644 "$REPO/soloist/spotify-soloist.service" "$CONFIG/systemd/user/spotify-soloist.service"
+  systemctl --user daemon-reload
+  systemctl --user enable spotify-soloist.service
+  systemctl --user is-active -q spotify-soloist.service || systemctl --user start spotify-soloist.service
 }
 
 install_display() {
-  sudo apt-get install -y -q chromium fonts-inter wlrctl wtype >/dev/null
+  # A Chromium-family browser, Inter for the UI, and on wlroots compositors
+  # (labwc, sway…) wlrctl and wtype to switch the window and toggle full screen.
+  if command -v apt-get > /dev/null; then
+    sudo apt-get install -y -q chromium fonts-inter wlrctl wtype > /dev/null
+  else
+    echo "Install a Chromium-family browser and the Inter font; on Wayland also wlrctl and wtype, on X11 xdotool."
+  fi
 
   sed "s|%h/apps/soloist-display|$REPO|" "$REPO/display/soloist-display.service" \
     > "$CONFIG/systemd/user/soloist-display.service"
@@ -34,20 +56,25 @@ install_display() {
   systemctl --user enable soloist-display.service
   systemctl --user restart soloist-display.service
 
-  install -Dm755 "$REPO/display/soloist-display-open" "$HOME/.local/bin/soloist-display-open"
+  install -d "$HOME/.local/bin"
+  cat > "$HOME/.local/bin/soloist-display-open" <<EOF
+#!/bin/sh
+exec python3 $REPO/display/open.py "\$@"
+EOF
+  chmod 755 "$HOME/.local/bin/soloist-display-open"
   local desktop
   desktop=$(sed "s|@HOME@|$HOME|" "$REPO/display/soloist-display.desktop")
   install -d "$HOME/.local/share/applications" "$CONFIG/autostart"
   echo "$desktop" > "$HOME/.local/share/applications/soloist-display.desktop"
   echo "$desktop" > "$CONFIG/autostart/soloist-display.desktop"
 
-  # Ctrl+Alt+P brings the display back. labwc runs with --merge-config, so the
-  # user rc.xml only needs the extra keybind.
+  # On labwc, Ctrl+Alt+P brings the display back. labwc runs with
+  # --merge-config, so the user rc.xml only needs the extra keybind.
   local rc="$CONFIG/labwc/rc.xml"
-  local keybind="<keyboard><keybind key=\"C-A-p\"><action name=\"Execute\" command=\"$HOME/.local/bin/soloist-display-open\" /></keybind></keyboard>"
-  [[ -f "$rc" ]] || echo '<?xml version="1.0"?>
+  if [[ -d "$CONFIG/labwc" ]] && ! grep -qs soloist-display-open "$rc"; then
+    local keybind="<keyboard><keybind key=\"C-A-p\"><action name=\"Execute\" command=\"$HOME/.local/bin/soloist-display-open\" /></keybind></keyboard>"
+    [[ -f "$rc" ]] || echo '<?xml version="1.0"?>
 <openbox_config xmlns="http://openbox.org/3.4/rc"/>' > "$rc"
-  if ! grep -q soloist-display-open "$rc"; then
     cp "$rc" "$rc.bak"
     python3 - "$rc" "$keybind" <<'EOF'
 import re, sys
