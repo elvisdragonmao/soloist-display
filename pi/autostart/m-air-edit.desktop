@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=M-AIR Edit
+Comment=Midas MR18 Digital Mixer Control
+Exec=/home/sdc/apps/m-air-edit/M-AIR-Edit
+Path=/home/sdc/apps/m-air-edit
+Icon=audio-card
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupNotify=true
