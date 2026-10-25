@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Open the now-playing display full screen, or bring it back to the front if it
+# is already open. Bound to Ctrl+Alt+P and run at login.
+set -euo pipefail
+
+URL="${SOLOIST_DISPLAY_URL:-http://127.0.0.1:8787/}"
+# Chromium names an --app window after its host; --class is ignored on Wayland.
+APP_ID=chrome-127.0.0.1__-Default
+PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/soloist-display/chromium"
+
+if wlrctl toplevel find "app_id:$APP_ID" 2>/dev/null; then
+  exec wlrctl toplevel focus "app_id:$APP_ID"
+fi
+
+# At login the server may still be starting.
+for _ in $(seq 60); do
+  curl -fs -o /dev/null "$URL" && break
+  sleep 1
+done
+
+exec chromium \
+  --user-data-dir="$PROFILE" \
+  --app="$URL" \
+  --start-fullscreen \
+  --ozone-platform=wayland \
+  --no-first-run \
+  --noerrdialogs \
+  --disable-session-crashed-bubble \
+  --hide-crash-restore-bubble \
+  --password-store=basic \
+  --disable-features=Translate,TranslateUI \
+  --check-for-update-interval=31536000

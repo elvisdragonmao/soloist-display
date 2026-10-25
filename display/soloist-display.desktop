@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=正在播放
+Name[en]=Now Playing
+Comment=Spotify Soloist 正在播放的曲目與歌詞（Ctrl+Alt+P）
+Exec=@HOME@/.local/bin/soloist-display-open
+Icon=audio-x-generic
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupNotify=false

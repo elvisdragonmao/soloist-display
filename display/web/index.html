@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-Hant" translate="no">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="google" content="notranslate">
+  <title>正在播放</title>
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body class="idle">
+  <div id="bg-fallback"></div>
+  <canvas id="bg"></canvas>
+  <div id="shade"></div>
+
+  <main id="stage">
+    <section id="player">
+      <div id="cover">
+        <img id="cover-img" alt="">
+      </div>
+      <div id="progress">
+        <span id="time-pos">0:00</span>
+        <div id="bar"><div id="bar-fill"></div></div>
+        <span id="time-dur">0:00</span>
+      </div>
+      <div id="meta">
+        <h1 id="title"></h1>
+        <p id="artist"></p>
+        <p id="album"></p>
+      </div>
+    </section>
+
+    <section id="lyrics" aria-live="off">
+      <div id="lyrics-lines"></div>
+    </section>
+  </main>
+
+  <section id="idle">
+    <div id="clock"></div>
+    <div id="device"></div>
+    <p id="hint">在 Spotify 選擇這台裝置即可開始播放</p>
+  </section>
+
+  <div id="offline">正在連線到 Soloist…</div>
+</body>
+</html>

@@ -1,0 +1,359 @@
+:root {
+  --font: "Inter", "Noto Sans CJK TC", "Noto Sans CJK HK", "Noto Sans CJK JP", "Noto Sans CJK KR",
+    "Droid Sans Fallback", system-ui, sans-serif;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --cover-size: min(52vh, 32vw);
+  --lyrics-size: clamp(28px, 5vh, 64px);
+  --lyrics-focus: 36%;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #fff;
+  font-family: var(--font);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  cursor: none;
+  user-select: none;
+}
+
+/* ─── Background ─────────────────────────────────────────────────────────── */
+
+#bg,
+#bg-fallback,
+#shade {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#bg {
+  filter: brightness(0.72) saturate(1.25);
+}
+
+#bg-fallback {
+  display: none;
+  background: var(--cover) center / cover no-repeat;
+  filter: blur(80px) brightness(0.6) saturate(1.8);
+  scale: 1.3;
+}
+
+.no-webgl #bg {
+  display: none;
+}
+
+.no-webgl #bg-fallback {
+  display: block;
+}
+
+#shade {
+  background: radial-gradient(ellipse at 30% 50%, transparent 0%, rgba(0, 0, 0, 0.25) 100%);
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  grid-template-columns: 42% 58%;
+  align-items: center;
+  transition: opacity 0.8s ease;
+}
+
+.idle #stage {
+  opacity: 0;
+}
+
+#player {
+  justify-self: center;
+  width: var(--cover-size);
+  display: flex;
+  flex-direction: column;
+  gap: 2.4vh;
+  transition: transform 1s var(--ease-out);
+}
+
+/* Without lyrics the player moves to the middle of the screen. */
+.no-lyrics #player {
+  transform: translateX(calc(50vw - 21vw));
+}
+
+#lyrics {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, transparent 0, #000 18%, #000 78%, transparent 100%);
+  transition: opacity 0.6s ease;
+}
+
+.no-lyrics #lyrics {
+  opacity: 0;
+}
+
+/* ─── Player ─────────────────────────────────────────────────────────────── */
+
+#cover {
+  position: relative;
+  width: var(--cover-size);
+  aspect-ratio: 1;
+  border-radius: 1.2vh;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2.4vh 6vh rgba(0, 0, 0, 0.45);
+  transition: scale 0.9s var(--ease-out), box-shadow 0.9s var(--ease-out);
+}
+
+.paused #cover {
+  scale: 0.9;
+  box-shadow: 0 1vh 3vh rgba(0, 0, 0, 0.35);
+}
+
+#cover img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 0.6s ease;
+}
+
+#cover img.leaving {
+  opacity: 0;
+}
+
+#progress {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 1.2vh;
+  font-size: 1.6vh;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+#bar {
+  height: 0.6vh;
+  border-radius: 1vh;
+  background: rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+
+#bar-fill {
+  height: 100%;
+  width: 100%;
+  border-radius: inherit;
+  background: rgba(255, 255, 255, 0.9);
+  transform-origin: left;
+  transform: scaleX(0);
+}
+
+#meta {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6vh;
+}
+
+#title {
+  font-size: 3.4vh;
+  font-weight: 700;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+#artist {
+  font-size: 2.4vh;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+#album {
+  font-size: 1.8vh;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#title,
+#artist,
+#album {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+#artist,
+#album {
+  -webkit-line-clamp: 1;
+}
+
+/* ─── Lyrics ─────────────────────────────────────────────────────────────── */
+
+#lyrics-lines {
+  position: absolute;
+  inset: 0 8% 0 2%;
+  font-size: var(--lyrics-size);
+  font-weight: 700;
+  line-height: 1.18;
+  letter-spacing: -0.01em;
+}
+
+.line {
+  --blur: 0px;
+  --alpha: 0.42;
+  padding: 0.32em 0;
+  transform-origin: left center;
+  transition:
+    transform 0.9s var(--ease-out),
+    opacity 0.4s ease;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 var(--blur) rgba(255, 255, 255, var(--alpha));
+  will-change: transform;
+}
+
+/* Blur is drawn by the text shadow, as in Spicy Lyrics: the glyphs are clear and
+   the shadow, same color, is what the eye sees. */
+.line.past {
+  --alpha: 0.32;
+}
+
+.line .w {
+  display: inline-block;
+  white-space: pre;
+  transform: translateY(0.035em);
+  transition: transform 1s var(--ease-out);
+}
+
+.line.past .w,
+.line.active .w.sung {
+  transform: none;
+}
+
+.line.active {
+  text-shadow: none;
+}
+
+.line.active .w {
+  --p: 0;
+  background-image: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 1) calc(var(--p) * 140% - 40%),
+    rgba(255, 255, 255, 0.38) calc(var(--p) * 140%)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  text-shadow: 0 0 0.35em rgba(255, 255, 255, calc(var(--p) * 0.28));
+}
+
+/* Unsynced lyrics: no active line, all readable, slowly following the song. */
+.static .line {
+  --alpha: 0.85;
+}
+
+/* Instrumental break: three dots that light up over the gap. */
+.line.dots {
+  display: flex;
+  gap: 0.28em;
+  height: 0;
+  padding: 0 0 0 0.06em;
+  overflow: visible;
+  opacity: 0;
+  transition:
+    transform 0.9s var(--ease-out),
+    opacity 0.5s ease,
+    height 0.6s var(--ease-out),
+    padding 0.6s var(--ease-out);
+}
+
+.line.dots.active {
+  height: 1.2em;
+  padding-block: 0.3em;
+  opacity: 1;
+}
+
+.dot {
+  width: 0.28em;
+  height: 0.28em;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, calc(0.3 + var(--d, 0) * 0.7));
+  scale: calc(0.85 + var(--d, 0) * 0.25);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  50% {
+    translate: 0 -0.04em;
+  }
+}
+
+/* ─── Idle ───────────────────────────────────────────────────────────────── */
+
+#idle {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+  pointer-events: none;
+}
+
+.idle #idle {
+  opacity: 1;
+}
+
+#clock {
+  font-size: 18vh;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+#device {
+  font-size: 4.2vh;
+  font-weight: 600;
+}
+
+#hint {
+  font-size: 2.4vh;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+#offline {
+  position: fixed;
+  right: 2vh;
+  bottom: 2vh;
+  padding: 0.8vh 1.6vh;
+  border-radius: 1vh;
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 1.6vh;
+  color: rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  transition: opacity 0.4s ease;
+}
+
+.offline #offline {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation: none !important;
+  }
+}
