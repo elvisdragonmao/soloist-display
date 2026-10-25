@@ -9,6 +9,7 @@ on LRCLIB with an on-disk cache. Standard library only.
 import argparse
 import json
 import os
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -26,6 +27,8 @@ LRCLIB = "https://lrclib.net/api"
 USER_AGENT = "soloist-display (https://github.com/elvisdragonmao/soloist-display)"
 # A track LRCLIB had nothing for is asked again after this long.
 MISS_TTL = 6 * 3600
+# The display window as labwc knows it (see soloist-display-open).
+APP_ID = os.environ.get("SOLOIST_DISPLAY_APP_ID", "chrome-127.0.0.1__-Default")
 
 
 def lrclib(path, params):
@@ -88,6 +91,14 @@ def cached_lyrics(key, track, artist, album, duration):
     return data
 
 
+def toggle_fullscreen():
+    """Press F11 in the display window. A page cannot leave the browser's own
+    full screen (--start-fullscreen) by script, so the server does it."""
+    env = {"WAYLAND_DISPLAY": "wayland-0", **os.environ}
+    subprocess.run(["wlrctl", "toplevel", "focus", f"app_id:{APP_ID}"], env=env, timeout=5)
+    subprocess.run(["wtype", "-k", "F11"], env=env, timeout=5, check=True)
+
+
 def soloist_ws_url():
     try:
         addr = (SOLOIST_DATA / "ws.addr").read_text().strip()
@@ -123,6 +134,19 @@ class Handler(SimpleHTTPRequestHandler):
         if url.path == "/api/lyrics":
             return self.lyrics(urllib.parse.parse_qs(url.query))
         return super().do_GET()
+
+    def do_POST(self):
+        if urllib.parse.urlsplit(self.path).path != "/api/fullscreen":
+            return self.send_json({"error": "not found"}, HTTPStatus.NOT_FOUND)
+        # Only the display page itself, not some other site open in a browser.
+        origin = self.headers.get("Origin")
+        if origin and origin != f"http://{self.headers.get('Host')}":
+            return self.send_json({"error": "forbidden"}, HTTPStatus.FORBIDDEN)
+        try:
+            toggle_fullscreen()
+        except (OSError, subprocess.SubprocessError) as e:
+            return self.send_json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+        return self.send_json({"ok": True})
 
     def lyrics(self, query):
         q = {k: v[0] for k, v in query.items()}

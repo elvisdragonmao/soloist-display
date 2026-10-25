@@ -9,7 +9,9 @@ APP_ID=chrome-127.0.0.1__-Default
 PROFILE="${XDG_DATA_HOME:-$HOME/.local/share}/soloist-display/chromium"
 
 if wlrctl toplevel find "app_id:$APP_ID" 2>/dev/null; then
-  exec wlrctl toplevel focus "app_id:$APP_ID"
+  wlrctl toplevel focus "app_id:$APP_ID"
+  wlrctl toplevel find "app_id:$APP_ID" state:fullscreen || wlrctl toplevel fullscreen "app_id:$APP_ID"
+  exit 0
 fi
 
 # At login the server may still be starting.

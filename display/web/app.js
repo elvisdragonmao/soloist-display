@@ -213,6 +213,46 @@ function tick() {
   updateIdle();
 }
 
+// ─── Full screen ─────────────────────────────────────────────────────────────
+//
+// The clubroom only has a mouse: moving it shows a hint, and a click leaves full
+// screen, or goes back to it. The server presses F11, because the page cannot
+// leave the browser's own full screen by itself.
+
+const POINTER_HIDE_MS = 3000;
+let pointerTimer = null;
+let toggling = false;
+
+function isFullscreen() {
+  return innerWidth >= screen.width - 1 && innerHeight >= screen.height - 1;
+}
+
+function updateFullscreen() {
+  const full = isFullscreen();
+  body.classList.toggle("fullscreen", full);
+  $("fs-hint").textContent = full ? "點一下離開全螢幕" : "點一下回到全螢幕";
+}
+
+addEventListener("resize", updateFullscreen);
+updateFullscreen();
+
+addEventListener("mousemove", () => {
+  body.classList.add("pointer");
+  clearTimeout(pointerTimer);
+  pointerTimer = setTimeout(() => body.classList.remove("pointer"), POINTER_HIDE_MS);
+});
+
+addEventListener("click", async () => {
+  if (toggling) return;
+  toggling = true;
+  try {
+    await fetch("/api/fullscreen", { method: "POST" });
+  } catch (error) {
+    console.warn("fullscreen", error);
+  }
+  setTimeout(() => (toggling = false), 800);
+});
+
 // ?demo=Track|Artist|seconds|coverUrl|startSecond plays a fake track, for working
 // on the UI without touching the real player.
 function demo(spec) {

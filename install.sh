@@ -26,7 +26,7 @@ install_soloist() {
 }
 
 install_display() {
-  sudo apt-get install -y -q chromium fonts-inter wlrctl >/dev/null
+  sudo apt-get install -y -q chromium fonts-inter wlrctl wtype >/dev/null
 
   sed "s|%h/apps/soloist-display|$REPO|" "$REPO/display/soloist-display.service" \
     > "$CONFIG/systemd/user/soloist-display.service"

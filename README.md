@@ -11,7 +11,7 @@
 ./deploy.sh display    # 只裝正在播放畫面
 ```
 
-`install.sh` 也可以直接在 Pi 上執行。Soloist API key 放在 Pi 的 `~/.config/soloist/soloist.env`，不進版控（格式見 `soloist/soloist.env.example`）。
+`install.sh` 也可以直接在 Pi 上執行，會用 apt 安裝 `chromium`、`fonts-inter`、`wlrctl`、`wtype`。Soloist API key 放在 Pi 的 `~/.config/soloist/soloist.env`，不進版控（格式見 `soloist/soloist.env.example`）。
 
 ## Soloist 自動更新
 
@@ -27,7 +27,8 @@ Soloist 官方執行檔發布 90 天後失效，失效後 systemd 重啟也救�
 ```
 Soloist ──WebSocket──▶ Chromium（全螢幕 app 視窗）
                           ▲
-server.py ──HTTP──────────┘  網頁、Soloist 的 WS 位址、歌詞（LRCLIB，快取在 ~/.cache/soloist-display）
+server.py ──HTTP──────────┘  網頁、Soloist 的 WS 位址、歌詞（LRCLIB，快取在 ~/.cache/soloist-display）、
+                             切換全螢幕（wlrctl + wtype）
 ```
 
 - Soloist 以 `--ws 127.0.0.1:0` 開啟本機 WebSocket API，每次啟動埠號都不同；`server.py` 從 `~/.local/share/soloist/ws.port` 讀出來給網頁，斷線時網頁會重新查詢並重連。
@@ -37,12 +38,17 @@ server.py ──HTTP──────────┘  網頁、Soloist 的 WS �
 
 ### 操作
 
+社辦只有滑鼠，所以全部用滑鼠就能操作：
+
 | 動作 | 方式 |
 | --- | --- |
-| 開機自動開啟 | `~/.config/autostart/soloist-display.desktop` |
-| 切到其他 App | Alt+Tab，或按 Super 開選單 |
-| 跳回正在播放 | **Ctrl+Alt+P**，或從應用程式選單點「正在播放」 |
-| 離開全螢幕 | F11 |
+| 開機自動開啟 | 自動，全螢幕（`~/.config/autostart/soloist-display.desktop`） |
+| 離開全螢幕 | 移動滑鼠會出現「點一下離開全螢幕」，點一下畫面任何地方 |
+| 回到全螢幕 | 在視窗裡點一下畫面 |
+| 切到其他 App | 離開全螢幕後點工作列，或 Alt+Tab |
+| 跳回正在播放 | 點工作列上的視窗、應用程式選單的「正在播放」，或 **Ctrl+Alt+P**（會一併恢復全螢幕） |
+
+滑鼠停 3 秒後游標與提示會自動隱藏。網頁本身沒辦法離開 Chromium 的 `--start-fullscreen`，所以點擊時網頁呼叫 `server.py` 的 `POST /api/fullscreen`，由它用 `wlrctl` 聚焦視窗、再用 `wtype` 按 F11。
 
 ### 參數
 
@@ -67,5 +73,10 @@ SOLOIST_DATA_DIR=/tmp/sol python3 display/server.py --port 8788
 | `soloist/` | `spotify-soloist.service`、自動更新腳本與 timer |
 | `display/server.py` | 本機 HTTP server（只用 Python 標準函式庫） |
 | `display/web/` | 正在播放畫面 |
-| `display/soloist-display-open` | 開啟或切回畫面的啟動腳本 |
+| `display/soloist-display-open` | 開啟或切回畫面的啟動腳本（Ctrl+Alt+P、選單、開機自動啟動都用它） |
 | `pi/` | Pi 上其他既有設定的快照（kanshi、labwc、M-AIR Edit 自動啟動） |
+
+## 授權
+
+[MIT](LICENSE)。`display/web/vendor/kawarp.js` 來自 [Kawarp](https://github.com/better-lyrics/kawarp)，同為 MIT（見 `kawarp.LICENSE`）。
+Soloist 執行檔屬 Spotify 所有，不包含在這個 repo 裡，由更新腳本從官方 CDN 下載。

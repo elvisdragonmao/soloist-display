@@ -21,8 +21,17 @@ body {
   font-family: var(--font);
   font-feature-settings: "cv11", "ss01";
   -webkit-font-smoothing: antialiased;
-  cursor: none;
   user-select: none;
+}
+
+/* Full screen, the pointer hides until the mouse moves. */
+.fullscreen:not(.pointer),
+.fullscreen:not(.pointer) * {
+  cursor: none;
+}
+
+body {
+  cursor: pointer;
 }
 
 /* ─── Background ─────────────────────────────────────────────────────────── */
@@ -349,6 +358,30 @@ body {
 
 .offline #offline {
   opacity: 1;
+}
+
+#fs-hint {
+  position: fixed;
+  left: 50%;
+  bottom: 4vh;
+  translate: -50% 1vh;
+  padding: 1.2vh 2.4vh;
+  border-radius: 99px;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  font-size: 2vh;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.92);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.3s ease,
+    translate 0.3s var(--ease-out);
+}
+
+.pointer #fs-hint {
+  opacity: 1;
+  translate: -50% 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
